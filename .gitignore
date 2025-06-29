@@ -1,0 +1,14 @@
+.venv
+.env
+__pycache__
+*.log
+*.cover
+coverage.xml
+htmlcov/
+.cache/
+.pytest_cache/
+.sqlite3
+.idea/
+*.sqp
+.ipynb_checkpoints/
+.idea
