@@ -68,12 +68,13 @@ class Database:
         Args:
            table (str): The name of the table where the record will be inserted.
            columns (list of str): A list of column names for the insert.
-            values (list): A list of values corresponding to each column.
-            autocommit (bool, optional): If True, commits the transaction after the insert.
-               Defaults to False.
+           values (list): A list of values corresponding to each column.
+           autocommit (bool, optional): If True, commits the transaction after the insert.
+                                      Defaults to False.
 
         Returns:
-           bool: True if the record was inserted successfully, False otherwise.
+           inserted_record (dict): Dictionary containing the inserted record, or an empty dictionary if
+                                   insertion fails.
 
         Raises:
             Exception: Propagates any database-related exceptions if not handled internally.
@@ -82,22 +83,26 @@ class Database:
         record = {col: value for col, value in zip(columns, values) if not col.startswith('_')}
         n_columns = len(record)
 
-        sql_statement = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values})").format(
+        sql_statement = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING *;").format(
             table=sql.Identifier(table),
             fields=sql.SQL(',').join(map(sql.Identifier, record.keys())),
             values=sql.SQL(',').join(sql.Placeholder() * n_columns)
         )
 
+        inserted_record = {}
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql_statement, list(record.values()))
+                record_values = cursor.fetchone()
+                record_columns = [desc[0] for desc in cursor.description]
+                inserted_record = dict(zip(record_columns, record_values))
             if autocommit:
                 self.commit()
-            return True
         except Exception as e:
             self.rollback()
             print(f'[ERROR] insert_record failed: {e}')
-            return False
+
+        return inserted_record
 
     def select_records(self, table, columns='*', where_clause=None, where_values=None):
         """
@@ -133,9 +138,11 @@ class Database:
 
         with self.connection.cursor() as cursor:
             cursor.execute(query, where_values if where_values else [])
-            return cursor.fetchall()
+            records_columns = [desc[0] for desc in cursor.description]
+            records_values = cursor.fetchall()
+            records = [dict(zip(records_columns, values)) for values in records_values]
+            return records
 
-    from psycopg2 import sql
 
     def update_record(self, table, columns, values, where_clause, where_values, autocommit=False):
         """
